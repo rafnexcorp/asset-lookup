@@ -1,4 +1,4 @@
-let dataMap = {}; // Global variable to store parsed data
+let dataMap = {}; // Global variable to store parsed data (keys will be uppercase)
 
 // ===========================================
 // 1. DATA LOADING FUNCTIONS
@@ -12,8 +12,8 @@ function loadDataFromCSV() {
     fetch(csvFilePath)
         .then(response => {
             if (!response.ok) {
-                // This is the error you get when not using a server!
-                throw new Error(`HTTP error! Status: ${response.status}. Ensure you are using a local web server (e.g., Live Server).`);
+                // This error often occurs when not using a local web server (e.g., Live Server)
+                throw new Error(`HTTP error! Status: ${response.status}. Ensure you are using a local web server.`);
             }
             return response.text();
         })
@@ -21,15 +21,15 @@ function loadDataFromCSV() {
             parseCSV(csvContent);
             
             if (Object.keys(dataMap).length > 0) {
-                messageDiv.textContent = `Data loaded successfully! (${Object.keys(dataMap).length} records)`;
+                messageDiv.textContent = `✅ Data loaded successfully! (${Object.keys(dataMap).length} records)`;
                 document.getElementById('issuedOutput').textContent = "Enter Asset Tag and click Lookup.";
                 document.getElementById('returnedOutput').textContent = "Enter Asset Tag and click Lookup.";
             } else {
-                messageDiv.textContent = "Failed to parse CSV. Check columns, format, or ensure it's not empty.";
+                messageDiv.textContent = "❌ Failed to parse CSV. Check columns, format, or ensure it's not empty.";
             }
         })
         .catch(error => {
-            messageDiv.textContent = `Data loading failed: ${error.message}`;
+            messageDiv.textContent = `❌ Data loading failed: ${error.message}`;
             console.error('Fetch Error:', error);
             document.getElementById('issuedOutput').textContent = "Fatal Error: Could not load data file.";
             document.getElementById('returnedOutput').textContent = "Fatal Error: Could not load data file.";
@@ -41,6 +41,7 @@ function parseCSV(csv) {
     dataMap = {}; 
     const messageDiv = document.getElementById('message');
     
+    // Clean and split lines
     const lines = csv.trim().split('\n').map(line => line.replace(/\r/g, ''));
 
     if (lines.length < 2) return; 
@@ -48,14 +49,14 @@ function parseCSV(csv) {
     const headers = lines[0].split(',').map(h => h.trim());
     const expectedColumnCount = headers.length;
     
-    // ⭐ REQUIRED COLUMNS: Must match the headers in your CSV
+    // Find required column indices
     const assetTagIndex = headers.indexOf('Asset Tag');
     const serialNumberIndex = headers.indexOf('Serial Number');
     const modelNameIndex = headers.indexOf('Model Name');
-    const assetTypeIndex = headers.indexOf('Asset Type'); // NEW
+    const assetTypeIndex = headers.indexOf('Asset Type'); 
 
     if (assetTagIndex === -1 || serialNumberIndex === -1 || modelNameIndex === -1 || assetTypeIndex === -1) {
-        messageDiv.textContent = "Failed to parse CSV: Missing required headers (Asset Tag, Serial Number, Model Name, or Asset Type).";
+        messageDiv.textContent = "❌ Failed to parse CSV: Missing required headers (Asset Tag, Serial Number, Model Name, or Asset Type).";
         return;
     }
 
@@ -63,21 +64,25 @@ function parseCSV(csv) {
         const line = lines[i];
         if (!line.trim()) continue; 
         
-        // This simple split fails if a field contains an unescaped comma
         const values = line.split(',');
         
         if (values.length !== expectedColumnCount) {
             console.error(`Row ${i + 1} has an inconsistent column count.`);
-            messageDiv.textContent = `Failed to parse data. Row ${i + 1} is corrupted (inconsistent columns).`;
+            messageDiv.textContent = `❌ Failed to parse data. Row ${i + 1} is corrupted (inconsistent columns).`;
             dataMap = {}; 
             return;
         }
 
-        const assetTag = values[assetTagIndex].trim();
-        dataMap[assetTag] = {
+        const originalAssetTag = values[assetTagIndex].trim();
+        
+        // ⭐ CRITICAL for Case-Insensitivity: Store the key in a standardized case (UPPERCASE)
+        const standardizedAssetTag = originalAssetTag.toUpperCase(); 
+
+        dataMap[standardizedAssetTag] = {
+            'assetTag': originalAssetTag, // Store original tag for display
             'serialNumber': values[serialNumberIndex].trim(),
             'modelName': values[modelNameIndex].trim(),
-            'assetType': values[assetTypeIndex].trim() // NEW
+            'assetType': values[assetTypeIndex].trim()
         };
     }
 }
@@ -88,7 +93,9 @@ function parseCSV(csv) {
 
 // Function to perform the lookup
 function performLookup() {
-    const inputTag = document.getElementById('assetTagInput').value.trim();
+    // ⭐ CRITICAL for Case-Insensitivity: Convert input to the standardized case (UPPERCASE)
+    const inputTag = document.getElementById('assetTagInput').value.trim().toUpperCase(); 
+    
     const issuedOutputDiv = document.getElementById('issuedOutput');
     const returnedOutputDiv = document.getElementById('returnedOutput');
     const copyIssuedButton = document.getElementById('copyIssuedButton');
@@ -110,33 +117,40 @@ function performLookup() {
         return;
     }
 
+    // Lookup using the standardized uppercase input
     const item = dataMap[inputTag];
 
     if (item) {
+        // ⭐ CONDITIONAL LOGIC for 'JC Removed: Y' line
+        let jcRemovedLine = '';
+        if (item.assetType.toLowerCase() === 'laptop') {
+            jcRemovedLine = 'JC Removed: Y\n';
+        }
+        
         // --- TEMPLATE 1: FACILITIES ISSUED ---
+        // Use item.assetTag (original case) for display
         const issuedTemplate = `Facilities: ${item.assetType} Issued
 Model: ${item.modelName}
 Serial Number: ${item.serialNumber}
-Asset Tag: ${inputTag}
-
-CMDB Updated: `;
+Asset Tag: ${item.assetTag}
+            
+CMDB Updated: Y`;
         
         // --- TEMPLATE 2: FACILITIES RETURNED ---
         const returnedTemplate = `Facilities: ${item.assetType} Returned
 Model: ${item.modelName}
 Serial Number: ${item.serialNumber}
-Asset Tag: ${inputTag}
+Asset Tag: ${item.assetTag}
+${jcRemovedLine}CMDB Updated: Y`;
 
-JC Removed: 
-CMDB Updated: `;
-        
         issuedOutputDiv.textContent = issuedTemplate;
         returnedOutputDiv.textContent = returnedTemplate;
         copyIssuedButton.disabled = false;
         copyReturnedButton.disabled = false;
-        messageDiv.textContent = `✅ Asset Tag ${inputTag} found.`;
+        messageDiv.textContent = `✅ Asset Tag ${item.assetTag} found.`;
     } else {
-        const errorMsg = `Error: Asset Tag "${inputTag}" not found in the loaded data.`;
+        // Use the original input value for the error message
+        const errorMsg = `Error: Asset Tag "${document.getElementById('assetTagInput').value.trim()}" not found in the loaded data.`;
         issuedOutputDiv.textContent = errorMsg;
         returnedOutputDiv.textContent = errorMsg;
         messageDiv.textContent = ""; 
@@ -167,6 +181,7 @@ function clearFields() {
     document.getElementById('issuedOutput').textContent = 'Enter Asset Tag and click Lookup.';
     document.getElementById('returnedOutput').textContent = 'Enter Asset Tag and click Lookup.';
     
+    // Clear the asset tag found message
     if (document.getElementById('message').textContent.startsWith('✅ Asset Tag')) {
         document.getElementById('message').textContent = '';
     }
@@ -175,19 +190,17 @@ function clearFields() {
     document.getElementById('copyReturnedButton').disabled = true;
 }
 
+// ⭐ NEW: Function to check if the pressed key is the Enter key
+function checkEnter(event) {
+    if (event.key === 'Enter') {
+        performLookup();
+        event.preventDefault(); 
+    }
+}
+
 // ===========================================
 // 3. INITIALIZATION
 // ===========================================
 
 // Start the data loading process automatically when the script executes
 loadDataFromCSV();
-
-// ⭐ NEW: Function to check if the pressed key is the Enter key
-function checkEnter(event) {
-    // Check if the key code is 13 (Enter key)
-    if (event.key === 'Enter') {
-        performLookup();
-        // Prevent default form submission if this were part of a form
-        event.preventDefault(); 
-    }
-}
