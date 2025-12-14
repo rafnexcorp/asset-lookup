@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Asset Tag Lookup (CSV)</title>
+    <style>
+        /* (Styles omitted for brevity, they remain the same) */
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .template-section {
+            margin-top: 20px;
+            border-top: 2px solid #ccc;
+            padding-top: 15px;
+        }
+        .output-box { 
+            white-space: pre-wrap; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            background-color: #f9f9f9; 
+            min-height: 80px; 
+            margin-bottom: 5px;
+        }
+        .copy-button { 
+            margin-top: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #message {
+            margin-top: 5px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Asset Tag Lookup Tool (CSV)</h2>
+    
+    <label for="assetTagInput">**1. Enter Asset Tag:**</label>
+    <input type="text" id="assetTagInput" placeholder="e.g., LPT-12345" onkeyup="checkEnter(event)"> <button onclick="performLookup()">Lookup</button>
+    <button onclick="clearFields()">Clear</button>
+
+    <div id="message">Loading data...</div> 
+
+    <div class="template-section">
+        <h3>Facilities Issued Template</h3>
+        <div id="issuedOutput" class="output-box">Waiting for data to load...</div>
+        <button id="copyIssuedButton" onclick="copyOutput('issuedOutput')" class="copy-button" disabled>Copy Issued Output</button>
+    </div>
+
+    <div class="template-section">
+        <h3>Facilities Returned Template</h3>
+        <div id="returnedOutput" class="output-box">Waiting for data to load...</div>
+        <button id="copyReturnedButton" onclick="copyOutput('returnedOutput')" class="copy-button" disabled>Copy Returned Output</button>
+    </div>
+
+    <script src="lookup.js"></script>
+</body>
+</html>
