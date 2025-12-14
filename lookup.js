@@ -142,7 +142,8 @@ Model: ${item.modelName}
 Serial Number: ${item.serialNumber}
 Asset Tag: ${item.assetTag}
             
-${jcRemovedLine}CMDB Updated: Y`;
+${jcRemovedLine}
+CMDB Updated: Y`;
 
         issuedOutputDiv.textContent = issuedTemplate;
         returnedOutputDiv.textContent = returnedTemplate;
