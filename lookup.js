@@ -1,4 +1,5 @@
-let dataMap = {}; // Global variable to store parsed data (keys will be uppercase)
+let dataMap = {};   // Global variable for Asset Tag lookup (key: UPPERCASE Asset Tag)
+let serialMap = {}; // Global variable for Serial Number lookup (key: UPPERCASE Serial Number)
 
 // ===========================================
 // 1. DATA LOADING FUNCTIONS
@@ -22,8 +23,8 @@ function loadDataFromCSV() {
             
             if (Object.keys(dataMap).length > 0) {
                 messageDiv.textContent = `✅ Data loaded successfully! (${Object.keys(dataMap).length} records)`;
-                document.getElementById('issuedOutput').textContent = "Enter Asset Tag and click Lookup.";
-                document.getElementById('returnedOutput').textContent = "Enter Asset Tag and click Lookup.";
+                document.getElementById('issuedOutput').textContent = "Enter Asset Tag or Serial Number and click Lookup.";
+                document.getElementById('returnedOutput').textContent = "Enter Asset Tag or Serial Number and click Lookup.";
             } else {
                 messageDiv.textContent = "❌ Failed to parse CSV. Check columns, format, or ensure it's not empty.";
             }
@@ -36,9 +37,10 @@ function loadDataFromCSV() {
         });
 }
 
-// Function to parse the CSV and prepare the lookup map
+// Function to parse the CSV and prepare the lookup maps
 function parseCSV(csv) {
     dataMap = {}; 
+    serialMap = {}; // ⭐ Reset the new serial map
     const messageDiv = document.getElementById('message');
     
     // Clean and split lines
@@ -70,20 +72,28 @@ function parseCSV(csv) {
             console.error(`Row ${i + 1} has an inconsistent column count.`);
             messageDiv.textContent = `❌ Failed to parse data. Row ${i + 1} is corrupted (inconsistent columns).`;
             dataMap = {}; 
+            serialMap = {};
             return;
         }
 
         const originalAssetTag = values[assetTagIndex].trim();
+        const originalSerialNumber = values[serialNumberIndex].trim();
         
-        // ⭐ CRITICAL for Case-Insensitivity: Store the key in a standardized case (UPPERCASE)
-        const standardizedAssetTag = originalAssetTag.toUpperCase(); 
-
-        dataMap[standardizedAssetTag] = {
-            'assetTag': originalAssetTag, // Store original tag for display
-            'serialNumber': values[serialNumberIndex].trim(),
+        // Data structure for the item
+        const itemData = {
+            'assetTag': originalAssetTag, 
+            'serialNumber': originalSerialNumber,
             'modelName': values[modelNameIndex].trim(),
             'assetType': values[assetTypeIndex].trim()
         };
+
+        // ⭐ 1. Populate dataMap (Asset Tag Lookup)
+        const standardizedAssetTag = originalAssetTag.toUpperCase(); 
+        dataMap[standardizedAssetTag] = itemData;
+
+        // ⭐ 2. Populate serialMap (Serial Number Lookup)
+        const standardizedSerialNumber = originalSerialNumber.toUpperCase();
+        serialMap[standardizedSerialNumber] = itemData;
     }
 }
 
@@ -93,8 +103,9 @@ function parseCSV(csv) {
 
 // Function to perform the lookup
 function performLookup() {
-    // ⭐ CRITICAL for Case-Insensitivity: Convert input to the standardized case (UPPERCASE)
-    const inputTag = document.getElementById('assetTagInput').value.trim().toUpperCase(); 
+    const rawInput = document.getElementById('assetTagInput').value.trim();
+    // Standardize input for case-insensitive search
+    const standardizedInput = rawInput.toUpperCase(); 
     
     const issuedOutputDiv = document.getElementById('issuedOutput');
     const returnedOutputDiv = document.getElementById('returnedOutput');
@@ -111,24 +122,34 @@ function performLookup() {
         return;
     }
     
-    if (!inputTag) {
-        issuedOutputDiv.textContent = "Please enter an Asset Tag.";
-        returnedOutputDiv.textContent = "Please enter an Asset Tag.";
+    if (!rawInput) {
+        issuedOutputDiv.textContent = "Please enter an Asset Tag or Serial Number.";
+        returnedOutputDiv.textContent = "Please enter an Asset Tag or Serial Number.";
         return;
     }
 
-    // Lookup using the standardized uppercase input
-    const item = dataMap[inputTag];
+    // ⭐ STEP 1: Try lookup using Asset Tag map
+    let item = dataMap[standardizedInput];
+
+    // ⭐ STEP 2: If Asset Tag lookup failed, try Serial Number map
+    let isSerialLookup = false;
+    if (!item) {
+        item = serialMap[standardizedInput];
+        if (item) {
+            isSerialLookup = true;
+        }
+    }
+
 
     if (item) {
-        // ⭐ CONDITIONAL LOGIC for 'JC Removed: Y' line
+        // --- Asset Found Logic ---
+        
+        // Conditional line for Returned Template
         let jcRemovedLine = '';
         if (item.assetType.toLowerCase() === 'laptop') {
             jcRemovedLine = 'JC Removed: Y\n';
         }
         
-        // --- TEMPLATE 1: FACILITIES ISSUED ---
-        // Use item.assetTag (original case) for display
         const issuedTemplate = `Facilities: ${item.assetType} Issued
 Model: ${item.modelName}
 Serial Number: ${item.serialNumber}
@@ -136,29 +157,29 @@ Asset Tag: ${item.assetTag}
             
 CMDB Updated: Y`;
         
-        // --- TEMPLATE 2: FACILITIES RETURNED ---
         const returnedTemplate = `Facilities: ${item.assetType} Returned
 Model: ${item.modelName}
 Serial Number: ${item.serialNumber}
 Asset Tag: ${item.assetTag}
-            
 ${jcRemovedLine}CMDB Updated: Y`;
 
         issuedOutputDiv.textContent = issuedTemplate;
         returnedOutputDiv.textContent = returnedTemplate;
         copyIssuedButton.disabled = false;
         copyReturnedButton.disabled = false;
-        messageDiv.textContent = `✅ Asset Tag ${item.assetTag} found.`;
+        
+        let foundType = isSerialLookup ? 'Serial Number' : 'Asset Tag';
+        messageDiv.textContent = `✅ Found match by ${foundType}: ${item.assetTag}`;
     } else {
-        // Use the original input value for the error message
-        const errorMsg = `Error: Asset Tag "${document.getElementById('assetTagInput').value.trim()}" not found in the loaded data.`;
+        // --- Asset Not Found Logic ---
+        const errorMsg = `Error: "${rawInput}" not found as Asset Tag OR Serial Number.`;
         issuedOutputDiv.textContent = errorMsg;
         returnedOutputDiv.textContent = errorMsg;
         messageDiv.textContent = ""; 
     }
 }
 
-// Function to copy the output text to the clipboard
+// Function to copy the output text to the clipboard (UNCHANGED)
 function copyOutput(elementId) {
     const outputText = document.getElementById(elementId).textContent;
     const messageDiv = document.getElementById('message');
@@ -176,14 +197,14 @@ function copyOutput(elementId) {
         });
 }
 
-// Function to clear the input and output fields
+// Function to clear the input and output fields (UNCHANGED)
 function clearFields() {
     document.getElementById('assetTagInput').value = '';
-    document.getElementById('issuedOutput').textContent = 'Enter Asset Tag and click Lookup.';
-    document.getElementById('returnedOutput').textContent = 'Enter Asset Tag and click Lookup.';
+    document.getElementById('issuedOutput').textContent = 'Enter Asset Tag or Serial Number and click Lookup.';
+    document.getElementById('returnedOutput').textContent = 'Enter Asset Tag or Serial Number and click Lookup.';
     
     // Clear the asset tag found message
-    if (document.getElementById('message').textContent.startsWith('✅ Asset Tag')) {
+    if (document.getElementById('message').textContent.startsWith('✅')) {
         document.getElementById('message').textContent = '';
     }
 
@@ -191,7 +212,7 @@ function clearFields() {
     document.getElementById('copyReturnedButton').disabled = true;
 }
 
-// ⭐ NEW: Function to check if the pressed key is the Enter key
+// Function to check if the pressed key is the Enter key (UNCHANGED)
 function checkEnter(event) {
     if (event.key === 'Enter') {
         performLookup();
